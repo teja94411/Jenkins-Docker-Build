@@ -1,0 +1,22 @@
+{
+    "sourceFile": "Greenstone-Docker(Project)/Dockerfile",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 1,
+            "patches": [
+                {
+                    "date": 1738235545773,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1738237066910,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,1 +1,17 @@\n-FROM base \r\n+#Step1:- Set up frontend dockerfile\r\n+FROM nginx \r\n+WORKDIR /frontend \r\n+COPY frontend/ /usr/share/nginx/html\r\n+\r\n+#Step2:- Set up backend dockerfile\r\n+FROM python:3.9-slim as backend\r\n+WORKDIR /backend\r\n+COPY backend / /backend/\r\n+RUN pip install --no-cache-dir -r requirements.txt\r\n+\r\n+#Step3:-Combining backend and frontend\r\n+FROM nginx:alpine\r\n+COPY --from=frontend-build /usr/share/nginx/html /usr/share/nginx/html \r\n+COPY --from=backend /backend /backend\r\n+EXPOSE 80 5000                                                       \r\n+CMD [\"bat\", \"-c\", \"python /backend/app.py &nginx -g 'daemon off;'\"]\n\\ No newline at end of file\n"
+                }
+            ],
+            "date": 1738235545773,
+            "name": "Commit-0",
+            "content": "FROM base \r\n"
+        }
+    ]
+}
