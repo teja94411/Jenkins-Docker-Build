@@ -30,24 +30,25 @@ pipeline {
             }
         }
         stage('Run PostgreSQL') {
-            steps {
-                script {
-                    // Run PostgreSQL container with the created volume
-                    bat '''
-                    docker run -d ^
-                        --network %NETWORK_NAME% ^
-                        --name %DB_CONTAINER% ^
-                        -e POSTGRES_DB=testdb ^
-                        -e POSTGRES_USER=user ^
-                        -e POSTGRES_PASSWORD=password ^
-                        -v %VOLUME_NAME%:/var/lib/postgresql/data ^
-                        postgres:13
-                    '''
-                    // Optional: Add a delay to ensure the DB is ready
-                    bat "timeout /t 10"
-                }
-            }
+    steps {
+        script {
+            // Run PostgreSQL container with the created volume
+            bat '''
+            docker run -d ^
+                --network %NETWORK_NAME% ^
+                --name %DB_CONTAINER% ^
+                -e POSTGRES_DB=testdb ^
+                -e POSTGRES_USER=user ^
+                -e POSTGRES_PASSWORD=password ^
+                -v %VOLUME_NAME%:/var/lib/postgresql/data ^
+                postgres:13
+            '''
+            // Wait for 10 seconds to ensure PostgreSQL is fully initialized
+            bat "ping -n 10 127.0.0.1 > nul"  // Wait 10 seconds using ping as a workaround for timeout
         }
+    }
+}
+
         stage('Run Backend') {
             steps {
                 script {
