@@ -52,6 +52,15 @@ pipeline {
         stage('Run Backend') {
     steps {
         script {
+            // Stop and remove the existing 'backend' container if it exists
+            bat '''
+            docker ps -a --filter "name=backend" --format "{{.ID}}" | findstr /i "backend" >nul && (
+                echo Stopping and removing existing backend container...
+                docker stop backend
+                docker rm backend
+            )
+            '''
+
             // Run the Backend (Flask) app using Python image
             bat '''
             docker run -d ^
@@ -76,6 +85,7 @@ pipeline {
         }
     }
 }
+
 
         stage('Run Frontend') {
             steps {
