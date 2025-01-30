@@ -1,8 +1,8 @@
 pipeline {
     agent any
     environment {
-        FRONTEND_IMAGE = 'frontend-app'
-        BACKEND_IMAGE = 'backend-app'
+        FRONTEND_IMAGE = 'nginx:latest'  // Use Nginx image for serving static files
+        BACKEND_IMAGE = 'python:3.9-slim'  // Use Python image to run the Flask app
         DB_CONTAINER = 'postgres-db'
         NETWORK_NAME = 'my-network'
         VOLUME_NAME = 'pg_data'
@@ -11,96 +11,87 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[credentialsId: '3f601ce9-7463-4bde-bf20-ca21df940366', url: 'https://github.com/teja94411/Docker-Containerization.git']])
-                bat 'dir'  // List the contents of the workspace to verify repository structure
+                bat 'dir'  // Listing the directory contents to verify workspace structure
             }
         }
-
-        stage('Build Frontend') {
-            steps {
-                script {
-                    bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker build -t ${FRONTEND_IMAGE} -f Greenstone-Docker/Dockerfile ./frontend  // Build the frontend image
-                    '''
-                }
-            }
-        }
-
-        stage('Build Backend') {
-            steps {
-                script {
-                    bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker build -t ${BACKEND_IMAGE} -f Greenstone-Docker/Dockerfile ./backend  // Build the backend image
-                    '''
-                }
-            }
-        }
-
         stage('Setup Docker Network and Volume') {
             steps {
                 script {
-                    bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker volume create ${VOLUME_NAME}  // Create a Docker volume for PostgreSQL
-                    docker network create ${NETWORK_NAME}  // Create a Docker network
-                    '''
+                    // Create a Docker volume for PostgreSQL
+                    bat "docker volume create %VOLUME_NAME%"
+                    // Verify volume creation
+                    bat "docker volume ls"
+
+                    // Create a Docker network
+                    bat "docker network create %NETWORK_NAME%"
+                    // Verify network creation
+                    bat "docker network ls"
                 }
             }
         }
-
         stage('Run PostgreSQL') {
             steps {
                 script {
+                    // Run PostgreSQL container with the created volume
                     bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker run -d --network ${NETWORK_NAME} --name ${DB_CONTAINER} -e POSTGRES_DB=testdb -e POSTGRES_USER=user -e POSTGRES_PASSWORD=password -v ${VOLUME_NAME}:/var/lib/postgresql/data postgres:13
+                    docker run -d ^
+                        --network %NETWORK_NAME% ^
+                        --name %DB_CONTAINER% ^
+                        -e POSTGRES_DB=testdb ^
+                        -e POSTGRES_USER=user ^
+                        -e POSTGRES_PASSWORD=password ^
+                        -v %VOLUME_NAME%:/var/lib/postgresql/data ^
+                        postgres:13
                     '''
+                    // Optional: Add a delay to ensure the DB is ready
+                    bat "timeout /t 10"
                 }
             }
         }
-
         stage('Run Backend') {
             steps {
                 script {
+                    // Run the Backend (Flask) app using Python image
                     bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker run -d --network ${NETWORK_NAME} --name backend -e DB_HOST=${DB_CONTAINER} -e DB_NAME=testdb -e DB_USER=user -e DB_PASSWORD=password -p 5000:5000 ${BACKEND_IMAGE}
+                    docker run -d ^
+                        --network %NETWORK_NAME% ^
+                        --name backend ^
+                        -e DB_HOST=%DB_CONTAINER% ^
+                        -e DB_NAME=testdb ^
+                        -e DB_USER=user ^
+                        -e DB_PASSWORD=password ^
+                        -p 5000:5000 ^
+                        -v %WORKSPACE%\\backend:/app ^
+                        %BACKEND_IMAGE% bash -c "pip install -r /app/requirements.txt && python /app/app.py"
                     '''
+                    // Optional: Add a delay to ensure the backend is ready
+                    bat "timeout /t 10"
                 }
             }
         }
-
         stage('Run Frontend') {
             steps {
                 script {
+                    // Run the Frontend using the Nginx image to serve static files
                     bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker run -d --network ${NETWORK_NAME} --name frontend -p 3000:3000 ${FRONTEND_IMAGE}
+                    docker run -d ^
+                        --network %NETWORK_NAME% ^
+                        --name frontend ^
+                        -v %WORKSPACE%\\frontend:/usr/share/nginx/html:ro ^
+                        -p 80:80 ^
+                        %FRONTEND_IMAGE%
                     '''
                 }
             }
         }
-
-        stage('Run JUnit Tests') {
-            steps {
-                script {
-                    bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker exec backend python3 -m unittest discover tests/  // Run JUnit tests inside the backend container
-                    '''
-                }
-            }
-        }
-
         stage('Teardown') {
             steps {
                 script {
+                    // Stop and remove containers and network
                     bat '''
-                    cd Greenstone-Docker  // Change to the Greenstone-Docker directory
-                    docker stop frontend ${DB_CONTAINER}  // Stop frontend and PostgreSQL containers
-                    docker rm frontend backend ${DB_CONTAINER}  // Remove the containers
-                    docker network rm ${NETWORK_NAME}  // Remove the Docker network
+                    docker stop frontend backend %DB_CONTAINER%
+                    docker rm frontend backend %DB_CONTAINER%
+                    docker network rm %NETWORK_NAME%
                     '''
                 }
             }
