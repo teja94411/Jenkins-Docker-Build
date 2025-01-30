@@ -50,26 +50,33 @@ pipeline {
 }
 
         stage('Run Backend') {
-            steps {
-                script {
-                    // Run the Backend (Flask) app using Python image
-                    bat '''
-                    docker run -d ^
-                        --network %NETWORK_NAME% ^
-                        --name backend ^
-                        -e DB_HOST=%DB_CONTAINER% ^
-                        -e DB_NAME=testdb ^
-                        -e DB_USER=user ^
-                        -e DB_PASSWORD=password ^
-                        -p 5000:5000 ^
-                        -v %WORKSPACE%\\backend:/app ^
-                        %BACKEND_IMAGE% bash -c "pip install -r /app/requirements.txt && python /app/app.py"
-                    '''
-                    // Optional: Add a delay to ensure the backend is ready
-                    bat "timeout /t 10"
-                }
-            }
+    steps {
+        script {
+            // Run the Backend (Flask) app using Python image
+            bat '''
+            docker run -d ^
+                --network %NETWORK_NAME% ^
+                --name backend ^
+                -e DB_HOST=%DB_CONTAINER% ^
+                -e DB_NAME=testdb ^
+                -e DB_USER=user ^
+                -e DB_PASSWORD=password ^
+                -p 5000:5000 ^
+                -v %WORKSPACE%\\backend:/app ^
+                %BACKEND_IMAGE% cmd /c "pip install -r /app/requirements.txt && python /app/app.py"
+            '''
+            
+            // Optional: Wait for the backend to be ready
+            echo 'Waiting for backend to be ready...'
+            bat '''
+            :wait_for_backend
+            curl --silent --fail http://localhost:5000/ || goto wait_for_backend
+            echo Backend is ready
+            '''
         }
+    }
+}
+
         stage('Run Frontend') {
             steps {
                 script {
