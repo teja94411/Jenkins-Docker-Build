@@ -94,6 +94,7 @@ pipeline {
                     docker stop frontend backend %DB_CONTAINER%
                     docker rm frontend backend %DB_CONTAINER%
                     docker network rm %NETWORK_NAME%
+                    docker volume rm %VOLUME_NAME%
                     '''
                 }
             }
