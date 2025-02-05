@@ -18,84 +18,142 @@ pipeline {
             steps {
                 script {
                     // Create a Docker volume for PostgreSQL
-                    bat "docker volume create %VOLUME_NAME%"
-                    // Verify volume creation
-                    bat "docker volume ls"
+                    if (isUnix()) {
+                        sh "docker volume create ${VOLUME_NAME}"
+                        sh "docker volume ls"
+                    } else {
+                        bat "docker volume create %VOLUME_NAME%"
+                        bat "docker volume ls"
+                    }
 
                     // Create a Docker network
-                    bat "docker network create %NETWORK_NAME%"
-                    // Verify network creation
-                    bat "docker network ls"
+                    if (isUnix()) {
+                        sh "docker network create ${NETWORK_NAME}"
+                        sh "docker network ls"
+                    } else {
+                        bat "docker network create %NETWORK_NAME%"
+                        bat "docker network ls"
+                    }
                 }
             }
         }
+
         stage('Run PostgreSQL') {
-    steps {
-        script {
-            // Run PostgreSQL container with the created volume
-            bat '''
-            docker run -d ^
-                --network %NETWORK_NAME% ^
-                --name %DB_CONTAINER% ^
-                -e POSTGRES_DB=testdb ^
-                -e POSTGRES_USER=user ^
-                -e POSTGRES_PASSWORD=password ^
-                -v %VOLUME_NAME%:/var/lib/postgresql/data ^
-                postgres:13
-            '''
-            // Wait for 10 seconds to ensure PostgreSQL is fully initialized
-            bat "ping -n 10 127.0.0.1 > nul"  // Wait 10 seconds using ping as a workaround for timeout
+            steps {
+                script {
+                    if (isUnix()) {
+                        // Run PostgreSQL container with the created volume
+                        sh """
+                        docker run -d \\
+                            --network ${NETWORK_NAME} \\
+                            --name ${DB_CONTAINER} \\
+                            -e POSTGRES_DB=testdb \\
+                            -e POSTGRES_USER=user \\
+                            -e POSTGRES_PASSWORD=password \\
+                            -v ${VOLUME_NAME}:/var/lib/postgresql/data \\
+                            postgres:13
+                        """
+                        // Wait for 10 seconds to ensure PostgreSQL is fully initialized
+                        sh "sleep 10"
+                    } else {
+                        bat """
+                        docker run -d ^
+                            --network %NETWORK_NAME% ^
+                            --name %DB_CONTAINER% ^
+                            -e POSTGRES_DB=testdb ^
+                            -e POSTGRES_USER=user ^
+                            -e POSTGRES_PASSWORD=password ^
+                            -v %VOLUME_NAME%:/var/lib/postgresql/data ^
+                            postgres:13
+                        """
+                        // Wait for 10 seconds to ensure PostgreSQL is fully initialized
+                        bat "ping -n 10 127.0.0.1 > nul"  // Wait 10 seconds using ping as a workaround for timeout
+                    }
+                }
+            }
         }
-    }
-}
 
         stage('Run Backend') {
-    steps {
-        script {
-            // Run the Backend (Flask) app using Python image
-            bat '''
-            docker run -d ^
-                --network %NETWORK_NAME% ^
-                --name backend ^
-                -e DB_HOST=%DB_CONTAINER% ^
-                -e DB_NAME=testdb ^
-                -e DB_USER=user ^
-                -e DB_PASSWORD=password ^
-                -p 5000:5000 ^
-                -v %WORKSPACE%\\backend:/app ^
-                %BACKEND_IMAGE% bash -c "pip install -r /app/requirements.txt && python /app/app.py"
-            '''
+            steps {
+                script {
+                    if (isUnix()) {
+                        // Run the Backend (Flask) app using Python image
+                        sh """
+                        docker run -d \\
+                            --network ${NETWORK_NAME} \\
+                            --name backend \\
+                            -e DB_HOST=${DB_CONTAINER} \\
+                            -e DB_NAME=testdb \\
+                            -e DB_USER=user \\
+                            -e DB_PASSWORD=password \\
+                            -p 5000:5000 \\
+                            -v ${WORKSPACE}/backend:/app \\
+                            ${BACKEND_IMAGE} bash -c "pip install -r /app/requirements.txt && python /app/app.py"
+                        """
+                    } else {
+                        bat """
+                        docker run -d ^
+                            --network %NETWORK_NAME% ^
+                            --name backend ^
+                            -e DB_HOST=%DB_CONTAINER% ^
+                            -e DB_NAME=testdb ^
+                            -e DB_USER=user ^
+                            -e DB_PASSWORD=password ^
+                            -p 5000:5000 ^
+                            -v %WORKSPACE%\\backend:/app ^
+                            %BACKEND_IMAGE% bash -c "pip install -r /app/requirements.txt && python /app/app.py"
+                        """
+                    }
+                }
+            }
         }
-    }
-}
-
-
 
         stage('Run Frontend') {
             steps {
                 script {
-                    // Run the Frontend using the Nginx image to serve static files
-                    bat '''
-                    docker run -d ^
-                        --network %NETWORK_NAME% ^
-                        --name frontend ^
-                        -v %WORKSPACE%\\frontend:/usr/share/nginx/html:ro ^
-                        -p 80:80 ^
-                        %FRONTEND_IMAGE%
-                    '''
+                    if (isUnix()) {
+                        // Run the Frontend using the Nginx image to serve static files
+                        sh """
+                        docker run -d \\
+                            --network ${NETWORK_NAME} \\
+                            --name frontend \\
+                            -v ${WORKSPACE}/frontend:/usr/share/nginx/html:ro \\
+                            -p 80:80 \\
+                            ${FRONTEND_IMAGE}
+                        """
+                    } else {
+                        bat """
+                        docker run -d ^
+                            --network %NETWORK_NAME% ^
+                            --name frontend ^
+                            -v %WORKSPACE%\\frontend:/usr/share/nginx/html:ro ^
+                            -p 80:80 ^
+                            %FRONTEND_IMAGE%
+                        """
+                    }
                 }
             }
         }
+
         stage('Teardown') {
             steps {
                 script {
-                    // Stop and remove containers and network
-                    bat '''
-                    docker stop frontend backend %DB_CONTAINER%
-                    docker rm frontend backend %DB_CONTAINER%
-                    docker network rm %NETWORK_NAME%
-                    docker volume rm %VOLUME_NAME%
-                    '''
+                    if (isUnix()) {
+                        // Stop and remove containers and network
+                        sh """
+                        docker stop frontend backend ${DB_CONTAINER}
+                        docker rm frontend backend ${DB_CONTAINER}
+                        docker network rm ${NETWORK_NAME}
+                        docker volume rm ${VOLUME_NAME}
+                        """
+                    } else {
+                        bat """
+                        docker stop frontend backend %DB_CONTAINER%
+                        docker rm frontend backend %DB_CONTAINER%
+                        docker network rm %NETWORK_NAME%
+                        docker volume rm %VOLUME_NAME%
+                        """
+                    }
                 }
             }
         }
