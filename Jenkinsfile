@@ -4,7 +4,7 @@ pipeline {
         FRONTEND_IMAGE = 'nginx:latest'  // Use Nginx image for serving static files
         BACKEND_IMAGE = 'python:3.9-slim'  // Use Python image to run the Flask app
         DB_CONTAINER = 'postgres-db'
-        NETWORK_NAME = 'myy-network'
+        NETWORK_NAME = 'my-network'
         VOLUME_NAME = 'pg_data'
     }
     stages {
